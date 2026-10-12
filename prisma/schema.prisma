@@ -1,0 +1,351 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PathogenType {
+  VIRUS
+  BACTERIUM
+  PARASITE
+  FUNGUS
+  PRION
+  OTHER
+}
+
+/// Status as reported by the source. Never inferred from an absence of reports.
+enum OutbreakStatus {
+  SUSPECTED
+  CONFIRMED
+  REPORTED
+  DECLARED_OVER
+  HISTORICAL
+}
+
+enum LocationPrecision {
+  POINT
+  ADMIN2
+  ADMIN1
+  COUNTRY
+  REGION
+  UNKNOWN
+}
+
+/// What is being measured.
+enum Indicator {
+  CASES
+  DEATHS
+  INCIDENCE_RATE
+  MORTALITY_RATE
+  CASE_FATALITY_RATE
+}
+
+/// How the cases behind a value were classified by the source.
+enum CaseClassification {
+  CONFIRMED
+  PROBABLE
+  SUSPECTED
+  /// Reported by the source without a confirmed/suspected distinction.
+  REPORTED_UNSPECIFIED
+  /// Modelled estimate rather than a count of reported cases.
+  ESTIMATED
+}
+
+/// How a value relates to its reporting period.
+enum Aggregation {
+  /// New events occurring within [periodStart, periodEnd].
+  PERIOD_TOTAL
+  /// Running total since an origin date defined by the source.
+  CUMULATIVE
+  /// Number of existing cases at a point in time.
+  PREVALENCE
+  /// A rate or ratio computed by the source for the period.
+  RATE
+}
+
+enum GeoScope {
+  COUNTRY
+  REGION
+  INCOME_GROUP
+  GLOBAL
+  OTHER
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+enum SyncTrigger {
+  SCHEDULED
+  MANUAL
+  CLI
+}
+
+model Disease {
+  id               String       @id @default(cuid())
+  slug             String       @unique
+  name             String
+  scientificName   String?
+  alternativeNames String[]
+  description      String
+  pathogenType     PathogenType
+  /// Causative agent, e.g. "Vibrio cholerae".
+  pathogen         String?
+  transmission     String
+  symptoms         String?
+  prevention       String?
+  /// Array of { title, url, publisher } objects pointing at official references.
+  references       Json         @default("[]")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  outbreaks        Outbreak[]
+  observations     DiseaseObservation[]
+  sourceIndicators SourceIndicator[]
+}
+
+model Country {
+  id        String   @id @default(cuid())
+  iso2      String   @unique @db.Char(2)
+  iso3      String   @unique @db.Char(3)
+  name      String
+  region    String?
+  subregion String?
+  /// Representative point for labelling only. Never an outbreak location.
+  latitude  Decimal? @db.Decimal(9, 6)
+  longitude Decimal? @db.Decimal(9, 6)
+
+  observations      DiseaseObservation[]
+  outbreakLocations OutbreakLocation[]
+
+  @@index([region])
+  @@index([name])
+}
+
+model DataSource {
+  id                      String    @id @default(cuid())
+  /// Stable provider identifier, e.g. "who-gho".
+  slug                    String    @unique
+  name                    String
+  organization            String
+  homepageUrl             String
+  documentationUrl        String?
+  license                 String
+  licenseUrl              String?
+  attributionRequirements String
+  enabled                 Boolean   @default(true)
+  lastSuccessfulSync      DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  indicators   SourceIndicator[]
+  observations DiseaseObservation[]
+  reports      OutbreakReport[]
+  outbreaks    Outbreak[]
+  syncJobs     SyncJob[]
+}
+
+/// Definition of an upstream indicator as published by a source, plus the
+/// curated semantics WIDSP attaches to it.
+model SourceIndicator {
+  id                 String             @id @default(cuid())
+  sourceId           String
+  /// Upstream identifier, e.g. GHO "CHOLERA_0000000001".
+  code               String
+  /// Upstream display name, verbatim.
+  name               String
+  diseaseId          String
+  indicator          Indicator
+  caseClassification CaseClassification
+  aggregation        Aggregation
+  unit               String
+  /// Human-readable definition and caveats.
+  definition         String?
+  /// Whether the indicator was present in the latest upstream discovery.
+  available          Boolean            @default(true)
+  lastSeenAt         DateTime?
+  /// Last time this indicator's data was fetched and stored successfully.
+  lastSuccessfulSync DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  source       DataSource           @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  disease      Disease              @relation(fields: [diseaseId], references: [id], onDelete: Restrict)
+  observations DiseaseObservation[]
+
+  @@unique([sourceId, code])
+  @@index([diseaseId])
+}
+
+model Outbreak {
+  id              String         @id @default(cuid())
+  slug            String         @unique
+  diseaseId       String
+  title           String
+  summary         String?
+  status          OutbreakStatus
+  firstReportedAt DateTime?
+  lastReportedAt  DateTime?
+  /// Source whose reports this outbreak record was grouped from. Derived
+  /// outbreaks are rebuilt on each sync of that source.
+  sourceId        String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  disease   Disease            @relation(fields: [diseaseId], references: [id], onDelete: Restrict)
+  source    DataSource?        @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  locations OutbreakLocation[]
+  reports   OutbreakReport[]
+
+  @@index([diseaseId, lastReportedAt])
+  @@index([sourceId])
+  @@index([status])
+}
+
+model OutbreakLocation {
+  id                String            @id @default(cuid())
+  outbreakId        String
+  countryId         String?
+  regionName        String?
+  /// Only set when the source provides coordinates at this precision.
+  latitude          Decimal?          @db.Decimal(9, 6)
+  longitude         Decimal?          @db.Decimal(9, 6)
+  locationPrecision LocationPrecision
+
+  outbreak Outbreak @relation(fields: [outbreakId], references: [id], onDelete: Cascade)
+  country  Country? @relation(fields: [countryId], references: [id], onDelete: Restrict)
+
+  @@index([outbreakId])
+  @@index([countryId])
+}
+
+/// One source value for one indicator, geography and period, at one revision.
+/// Rows are never updated in place except to mark them superseded.
+model DiseaseObservation {
+  id                 String             @id @default(cuid())
+  diseaseId          String
+  /// Null for regional/global rows and for country codes that could not be matched.
+  countryId          String?
+  sourceId           String
+  sourceIndicatorId  String
+  indicator          Indicator
+  /// NULL means the source published the record without a value. Never zero-filled.
+  value              Decimal?           @db.Decimal(20, 6)
+  lowerBound         Decimal?           @db.Decimal(20, 6)
+  upperBound         Decimal?           @db.Decimal(20, 6)
+  /// The upstream value exactly as published, e.g. "1300 [1100-1600]".
+  rawValue           String?
+  unit               String
+  caseClassification CaseClassification
+  aggregation        Aggregation
+  geoScope           GeoScope
+  /// Upstream geography code (ISO3 for countries, WHO region codes, "GLOBAL", ...).
+  geoCode            String
+  periodStart        DateTime           @db.Date
+  periodEnd          DateTime           @db.Date
+  /// Timestamp the source attaches to the record (not disease onset).
+  reportedAt         DateTime?
+  ingestedAt         DateTime           @default(now())
+  /// Stable natural key of the record within the source (dedup key).
+  sourceRecordId     String
+  revision           Int
+  isLatest           Boolean            @default(true)
+  supersededAt       DateTime?
+  /// Hash of value-bearing fields; a change creates a new revision.
+  contentHash        String
+  syncJobId          String?
+  /// Upstream fields not modelled above (row id, comments, extra dimensions).
+  sourceMetadata     Json?
+
+  disease         Disease         @relation(fields: [diseaseId], references: [id], onDelete: Restrict)
+  country         Country?        @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  source          DataSource      @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  sourceIndicator SourceIndicator @relation(fields: [sourceIndicatorId], references: [id], onDelete: Restrict)
+  syncJob         SyncJob?        @relation(fields: [syncJobId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceId, sourceRecordId, revision])
+  @@index([sourceId, sourceRecordId, isLatest])
+  @@index([diseaseId, indicator, isLatest, periodEnd])
+  @@index([countryId, isLatest])
+  @@index([sourceIndicatorId, isLatest])
+  @@index([geoScope, geoCode])
+}
+
+model OutbreakReport {
+  id             String    @id @default(cuid())
+  /// Null until the report is linked to an outbreak record.
+  outbreakId     String?
+  sourceId       String
+  externalId     String
+  title          String
+  sourceUrl      String
+  publishedAt    DateTime
+  updatedAt      DateTime?
+  contentSummary String?
+  /// Upstream identifier shown to readers, e.g. WHO "2026-DON619".
+  displayId      String?
+  /// Geographic scope as worded by the source when no country could be
+  /// identified, e.g. "Global" or "Region of the Americas".
+  scopeLabel     String?
+  /// ISO 3166-1 alpha-3 codes of the countries named in this report's title.
+  countryIso3s   String[]  @default([])
+  ingestedAt     DateTime  @default(now())
+
+  outbreak Outbreak?  @relation(fields: [outbreakId], references: [id], onDelete: SetNull)
+  source   DataSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceId, externalId])
+  @@index([outbreakId])
+  @@index([publishedAt])
+}
+
+model SyncJob {
+  id               String      @id @default(cuid())
+  sourceId         String
+  trigger          SyncTrigger
+  startedAt        DateTime    @default(now())
+  completedAt      DateTime?
+  status           SyncStatus
+  recordsProcessed Int         @default(0)
+  recordsInserted  Int         @default(0)
+  recordsUpdated   Int         @default(0)
+  recordsUnchanged Int         @default(0)
+  recordsSkipped   Int         @default(0)
+  errorMessage     String?
+  /// Non-fatal issues: unmatched geographies, missing indicators, etc.
+  warnings         Json        @default("[]")
+
+  source       DataSource           @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  observations DiseaseObservation[]
+
+  @@index([sourceId, startedAt])
+  @@index([status])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+/// Lease-based lock preventing concurrent syncs of the same provider across
+/// processes. A lease past `expiresAt` is considered abandoned and can be taken.
+model SyncLock {
+  key        String   @id
+  holder     String
+  acquiredAt DateTime @default(now())
+  expiresAt  DateTime
+}

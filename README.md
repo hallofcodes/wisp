@@ -78,6 +78,40 @@ WIDSP is currently in its early development stage.
 
 The project is being built incrementally, with reliability and trustworthy data taking priority over simply displaying large amounts of information.
 
+What works today:
+
+- Data model for diseases, countries, sources, observations (with revisions), outbreaks, reports and sync jobs.
+- Three WHO sources, each with attribution, deduplication and revision history:
+  - Global Health Observatory: curated annual statistics (cholera, measles, malaria, tuberculosis, polio, yellow fever, plague).
+  - COVID-19 dashboard: weekly reported COVID-19 cases and deaths.
+  - Disease Outbreak News: official outbreak reports since 1996, grouped into outbreak records.
+- An interactive world map (`/map`): countries named in recent WHO outbreak reports pulse, faster for more recent reports, and reported statistics can be viewed by indicator and period.
+- An overview page with the latest official reports, stored indicators, reporting periods and sync status.
+
+Not yet available: disease/country/outbreak detail pages, the public API and scheduled synchronization.
+
+## Getting started
+
+Requirements: Node.js 20.19+ and PostgreSQL 14+.
+
+```bash
+npm install
+cp .env.example .env          # set DATABASE_URL
+npx prisma migrate deploy
+npm run db:seed
+npm run sync -- --all         # imports data from WHO GHO; takes several minutes
+npm run dev
+```
+
+Run the tests with `npm test` (integration tests need `TEST_DATABASE_URL`).
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Data sources](docs/data-sources.md)
+- [Methodology](docs/methodology.md)
+- [Deployment](docs/deployment.md)
+
 ## Philosophy
 
 WIDSP is built around a few simple principles:
@@ -110,8 +144,6 @@ Always refer to the original source and relevant local health authorities for of
 ## Project
 
 WIDSP is an independent open-source project.
-
-More information about the project, its development, data sources, and methodology will be documented as development progresses.
 
 ---
 
