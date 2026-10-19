@@ -64,8 +64,8 @@
   --border: oklch(0.92 0.015 255);
   --input: oklch(0.92 0.015 255);
   --ring: oklch(0.70 0.19 48);
-}
-
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.20 0.02 255);
 }
 
 .dark {
