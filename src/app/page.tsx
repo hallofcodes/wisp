@@ -11,11 +11,7 @@ export default function HomePage() {
     <div className="flex flex-col gap-8 sm:gap-10">
       <header className="flex flex-col gap-4 border-b border-[#E5E5E5] pb-6">
         <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#525252]">
-          <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#E5E5E5] bg-[#F5F5F5] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-[#171717]">
-            <span
-              aria-hidden="true"
-              className="size-1.5 rounded-full bg-[#FF5A1F]"
-            />
+          <span className="inline-flex items-center rounded-[4px] border border-[#E5E5E5] bg-[#F5F5F5] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-[#171717]">
             Surveillance Overview
           </span>
           <span aria-hidden="true" className="text-[#D4D4D4]">

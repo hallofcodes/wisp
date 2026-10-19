@@ -39,15 +39,9 @@ export async function OverviewSection() {
         className="border-l-4 border-l-[#B91C1C] bg-[#FEF2F2]/50"
       >
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="size-2 rounded-full bg-[#B91C1C]"
-            />
-            <CardTitle className="text-[#171717]">
-              Data is temporarily unavailable
-            </CardTitle>
-          </div>
+          <CardTitle className="text-[#171717]">
+            Data is temporarily unavailable
+          </CardTitle>
           <CardDescription className="text-[#525252]">
             The database could not be reached (or <code>DATABASE_URL</code> is
             not configured in <code>.env</code>). No statistics are shown rather
@@ -420,22 +414,10 @@ function SyncStatusBadge({ status }: { status: string }) {
       : status === "FAILED"
         ? "destructive"
         : "secondary";
-  const dotColor =
-    status === "SUCCEEDED"
-      ? "bg-[#15803D]"
-      : status === "FAILED"
-        ? "bg-[#B91C1C]"
-        : "bg-[#B45309]";
 
   return (
-    <Badge variant={variant} className="gap-1.5">
-      <span
-        aria-hidden="true"
-        className={`size-1.5 rounded-full ${dotColor}`}
-      />
-      <span>
-        {status.charAt(0) + status.slice(1).toLowerCase()}
-      </span>
+    <Badge variant={variant}>
+      {status.charAt(0) + status.slice(1).toLowerCase()}
     </Badge>
   );
 }

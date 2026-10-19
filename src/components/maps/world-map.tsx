@@ -366,13 +366,7 @@ export function WorldMap({
           className="absolute inset-0 grid place-items-center bg-[#F8F8F7]/90 text-sm font-medium text-[#525252]"
           aria-live="polite"
         >
-          <span className="inline-flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="size-2 animate-ping rounded-full bg-[#FF5A1F]"
-            />
-            Loading map boundaries…
-          </span>
+          Loading map boundaries…
         </div>
       )}
       {status === "error" && (

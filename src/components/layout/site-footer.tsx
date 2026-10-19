@@ -12,10 +12,6 @@ export function SiteFooter() {
               href="/"
               className="inline-flex items-center gap-2 rounded-sm text-sm font-semibold tracking-tight text-[#171717] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F]"
             >
-              <span
-                aria-hidden="true"
-                className="inline-block size-2 rounded-[2px] bg-[#FF5A1F]"
-              />
               <span>{siteConfig.name}</span>
               <span className="font-normal text-[#525252]">
                 — {siteConfig.fullName}

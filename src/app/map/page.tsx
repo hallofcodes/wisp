@@ -17,11 +17,7 @@ export default function MapPage({ searchParams }: PageProps<"/map">) {
       <header className="flex flex-col gap-3 border-b border-[#E5E5E5] pb-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs font-medium text-[#525252]">
-            <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#E5E5E5] bg-[#F5F5F5] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-[#171717]">
-              <span
-                aria-hidden="true"
-                className="size-1.5 rounded-full bg-[#FF5A1F]"
-              />
+            <span className="inline-flex items-center rounded-[4px] border border-[#E5E5E5] bg-[#F5F5F5] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-[#171717]">
               Geographic Surveillance Explorer
             </span>
             <span aria-hidden="true" className="text-[#D4D4D4]">

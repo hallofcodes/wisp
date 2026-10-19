@@ -133,15 +133,9 @@ export async function MapExplorer({
           className="border-l-4 border-l-[#B91C1C] bg-[#FEF2F2]/50"
         >
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                className="size-2 rounded-full bg-[#B91C1C]"
-              />
-              <CardTitle className="text-[#171717]">
-                Surveillance database is currently unavailable
-              </CardTitle>
-            </div>
+            <CardTitle className="text-[#171717]">
+              Surveillance database is currently unavailable
+            </CardTitle>
             <CardDescription className="text-[#525252]">
               The database could not be reached (or <code>DATABASE_URL</code> is
               not configured in <code>.env</code>). The interactive base map is
