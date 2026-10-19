@@ -1,30 +1,40 @@
-// this is the second file changes
 import Link from "next/link";
-import { Activity, Github } from "lucide-react";
-import { siteConfig, mainNav } from "@/lib/site";
+import { ArrowUpRight } from "lucide-react";
+import { mainNav, siteConfig } from "@/lib/site";
 
 export function SiteFooter() {
   return (
-    <footer className="mt-auto border-t border-slate-200 bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-start">
-          <div className="max-w-md">
-            <Link href="/" className="inline-flex items-center gap-2 font-bold text-slate-950">
-              <Activity size={19} className="text-orange-500" aria-hidden="true" />
-              WIDSP<span className="text-orange-500">.</span>
+    <footer className="mt-auto border-t border-[#E5E5E5] bg-[#F5F5F5] text-[#525252]">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        <div className="flex flex-col justify-between gap-6 md:flex-row md:items-start">
+          <div className="max-w-xl space-y-2">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-sm text-sm font-semibold tracking-tight text-[#171717] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F]"
+            >
+              <span
+                aria-hidden="true"
+                className="inline-block size-2 rounded-[2px] bg-[#FF5A1F]"
+              />
+              <span>{siteConfig.name}</span>
+              <span className="font-normal text-[#525252]">
+                — {siteConfig.fullName}
+              </span>
             </Link>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Open-source infectious disease surveillance and data
-              visualization, bringing public health information into one place.
+            <p className="text-xs leading-relaxed text-[#525252]">
+              {siteConfig.description}
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
+          <nav
+            aria-label="Footer navigation"
+            className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-medium"
+          >
             {mainNav.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="text-slate-600 transition-colors hover:text-orange-700"
+                className="text-[#525252] transition-colors hover:text-[#C23B0A] focus-visible:outline-none focus-visible:underline"
               >
                 {item.label}
               </Link>
@@ -32,21 +42,32 @@ export function SiteFooter() {
             <a
               href={siteConfig.repositoryUrl}
               target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 text-slate-600 transition-colors hover:text-orange-700"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[#171717] transition-colors hover:text-[#C23B0A] focus-visible:outline-none focus-visible:underline"
             >
-              <Github size={15} aria-hidden="true" />
-              Source code
+              <span>Source code (GitHub)</span>
+              <ArrowUpRight className="size-3.5" aria-hidden="true" />
             </a>
-          </div>
+          </nav>
         </div>
 
-        <div className="mt-7 border-t border-slate-100 pt-5">
-          <p className="text-xs leading-5 text-slate-500">
-            WIDSP is an information and data visualization project, not a
-            medical diagnosis tool and does not provide medical advice.
-            Reported data may be delayed, revised or incomplete. Always consult
-            original data sources and local health authorities.
+        <div className="mt-6 border-t border-[#E5E5E5] pt-5 space-y-2 text-xs leading-relaxed text-[#525252]">
+          <p>
+            <strong className="font-semibold text-[#171717]">
+              Data &amp; Surveillance Caveat:
+            </strong>{" "}
+            WIDSP is an open-source epidemiological information and data
+            visualization project, not a medical diagnosis tool, and does not
+            provide medical advice. Reported surveillance data is subject to
+            reporting lag, retrospective revision, and varying national case
+            definitions; absence of reported data does not indicate absence of
+            disease. Always consult original sources and public health
+            authorities.
+          </p>
+          <p className="text-[#737373]">
+            Independent open-source project. WIDSP is not affiliated with,
+            endorsed by, or operated by the World Health Organization (WHO) or
+            any national health agency.
           </p>
         </div>
       </div>

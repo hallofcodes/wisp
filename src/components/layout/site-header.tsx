@@ -1,70 +1,174 @@
-// ill make changes here. this is the first changed file
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Menu, X } from "lucide-react";
 import { mainNav, siteConfig } from "@/lib/site";
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const [openMenuPath, setOpenMenuPath] = useState<string | null>(null);
+  const mobileMenuOpen = openMenuPath === pathname;
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenMenuPath(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileMenuOpen]);
+
+  const isRouteActive = (href: string) =>
+    href === "/"
+      ? pathname === "/"
+      : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-orange-100 bg-white/95 backdrop-blur-md">
-      <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-4">
-        <Link href="/" className="flex shrink-0 items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-orange-500 text-white shadow-sm shadow-orange-200">
-            <Activity size={22} strokeWidth={2.5} aria-hidden="true" />
-          </span>
-          <span className="flex flex-col">
-            <span className="text-lg font-bold tracking-tight text-slate-950">
-              WIDSP<span className="text-orange-500">.</span>
+    <header className="sticky top-0 z-40 w-full border-b border-[#E5E5E5] bg-[#FFFFFF]/95 backdrop-blur-sm">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="flex items-center gap-6">
+          <Link
+            href="/"
+            onClick={() => setOpenMenuPath(null)}
+            className="group flex items-center gap-2.5 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F] focus-visible:ring-offset-2"
+          >
+            <span
+              aria-hidden="true"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] bg-[#171717] font-mono text-xs font-bold tracking-tighter text-[#FFFFFF] transition-colors group-hover:bg-[#FF5A1F]"
+            >
+              W
             </span>
-            <span className="hidden text-xs text-slate-500 sm:block">
-              Global disease intelligence
-            </span>
-          </span>
-          <span className="sr-only">{siteConfig.fullName}</span>
-        </Link>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-semibold tracking-tight text-[#171717] leading-none">
+                  {siteConfig.name}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="inline-block size-1.5 rounded-full bg-[#FF5A1F]"
+                />
+              </div>
+              <span className="hidden text-[11px] text-[#525252] leading-tight sm:inline-block">
+                {siteConfig.fullName}
+              </span>
+            </div>
+          </Link>
 
-        <nav aria-label="Main navigation">
-          <ul className="flex items-center gap-1 sm:gap-2">
-            {mainNav.map((item) => {
-              const active =
-                item.href === "/"
-                  ? pathname === "/"
-                  : pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
+          <nav
+            aria-label="Main navigation"
+            className="hidden md:flex md:items-center md:border-l md:border-[#E5E5E5] md:pl-5"
+          >
+            <ul className="flex items-center gap-1">
+              {mainNav.map((item) => {
+                const active = isRouteActive(item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      className={`relative inline-flex h-9 items-center rounded-[4px] px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F] ${
+                        active
+                          ? "bg-[#FFF4EF] text-[#171717] font-semibold"
+                          : "text-[#525252] hover:bg-[#F5F5F5] hover:text-[#171717]"
+                      }`}
+                    >
+                      {item.label}
+                      {active && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute inset-x-2.5 -bottom-[10px] h-[2px] bg-[#FF5A1F]"
+                        />
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        </div>
 
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={`inline-flex min-h-10 items-center rounded-lg px-3 text-sm font-medium transition-colors sm:px-4 ${
-                      active
-                        ? "bg-orange-50 text-orange-700"
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+        <div className="flex items-center gap-2">
+          <a
+            href={siteConfig.repositoryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden md:inline-flex h-8 items-center gap-1.5 rounded-[4px] border border-[#E5E5E5] bg-[#FFFFFF] px-2.5 text-xs font-medium text-[#525252] transition-colors hover:border-[#D4D4D4] hover:bg-[#F5F5F5] hover:text-[#171717] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F]"
+          >
+            <span>Source repository</span>
+            <ArrowUpRight className="size-3.5 text-[#737373]" aria-hidden="true" />
+          </a>
 
-        <a
-          href={siteConfig.repositoryUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="hidden items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-orange-300 hover:text-orange-700 md:inline-flex"
-        >
-          Open source
-          <ArrowUpRight size={15} aria-hidden="true" />
-        </a>
+          <button
+            type="button"
+            onClick={() =>
+              setOpenMenuPath((prev) => (prev === pathname ? null : pathname))
+            }
+            aria-expanded={mobileMenuOpen}
+            aria-controls="widsp-mobile-navigation"
+            aria-label={
+              mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"
+            }
+            className="inline-flex size-9 items-center justify-center rounded-[4px] border border-[#E5E5E5] bg-[#FFFFFF] text-[#171717] transition-colors hover:bg-[#F5F5F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F] md:hidden"
+          >
+            {mobileMenuOpen ? (
+              <X className="size-4" aria-hidden="true" />
+            ) : (
+              <Menu className="size-4" aria-hidden="true" />
+            )}
+          </button>
+        </div>
       </div>
+
+      {mobileMenuOpen && (
+        <div
+          id="widsp-mobile-navigation"
+          className="border-t border-[#E5E5E5] bg-[#FFFFFF] px-4 py-3 sm:px-6 md:hidden"
+        >
+          <nav aria-label="Mobile navigation">
+            <ul className="flex flex-col gap-1">
+              {mainNav.map((item) => {
+                const active = isRouteActive(item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={() => setOpenMenuPath(null)}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex min-h-10 items-center justify-between rounded-[4px] px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F] ${
+                        active
+                          ? "border-l-2 border-[#FF5A1F] bg-[#FFF4EF] font-semibold text-[#171717]"
+                          : "text-[#525252] hover:bg-[#F5F5F5] hover:text-[#171717]"
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                      {active && (
+                        <span className="text-[11px] font-medium uppercase tracking-wider text-[#C23B0A]">
+                          Current
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="mt-3 border-t border-[#E5E5E5] pt-3">
+              <a
+                href={siteConfig.repositoryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-9 items-center justify-between rounded-[4px] px-3 py-1.5 text-xs font-medium text-[#525252] hover:bg-[#F5F5F5] hover:text-[#171717] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F]"
+              >
+                <span>Open-source GitHub repository</span>
+                <ArrowUpRight className="size-3.5" aria-hidden="true" />
+              </a>
+            </div>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }

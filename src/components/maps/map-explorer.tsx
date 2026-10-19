@@ -1,7 +1,15 @@
+import Link from "next/link";
 import { connection } from "next/server";
+import { ArrowUpRight } from "lucide-react";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { getDb } from "@/lib/db/client";
 import {
   CLASSIFICATION_LABELS,
@@ -81,44 +89,100 @@ export async function MapExplorer({
 }) {
   const search = parseMapSearch(await searchParams);
   await connection();
-  const db = getDb();
 
-  const diseases = await db.disease.findMany({
-    where: { outbreaks: { some: {} } },
-    select: { slug: true, name: true },
-    orderBy: { name: "asc" },
-  });
+  let hasError = false;
+  let diseases: { slug: string; name: string }[] = [];
+  let indicatorOptions: Awaited<ReturnType<typeof getIndicatorOptions>> = [];
+  let stats: IndicatorMap | null = null;
+  let activity: ReportActivity | null = null;
+
+  try {
+    const db = getDb();
+    diseases = await db.disease.findMany({
+      where: { outbreaks: { some: {} } },
+      select: { slug: true, name: true },
+      orderBy: { name: "asc" },
+    });
+
+    if (search.mode === "stats") {
+      indicatorOptions = await getIndicatorOptions(db);
+      stats = await getIndicatorMap(
+        db,
+        indicatorOptions,
+        search.indicator,
+        search.period,
+      );
+    } else {
+      activity = await getReportActivity(db, search.window, search.disease);
+    }
+  } catch {
+    hasError = true;
+  }
+
+  if (hasError) {
+    return (
+      <div className="flex flex-col gap-5">
+        <Filters
+          search={search}
+          diseases={[]}
+          indicatorOptions={[]}
+          stats={null}
+        />
+        <Card
+          role="alert"
+          className="border-l-4 border-l-[#B91C1C] bg-[#FEF2F2]/50"
+        >
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="size-2 rounded-full bg-[#B91C1C]"
+              />
+              <CardTitle className="text-[#171717]">
+                Surveillance database is currently unavailable
+              </CardTitle>
+            </div>
+            <CardDescription className="text-[#525252]">
+              The database could not be reached (or <code>DATABASE_URL</code> is
+              not configured in <code>.env</code>). The interactive base map is
+              shown below with no highlighted countries rather than displaying
+              fabricated or stale surveillance data.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+        <WorldMap
+          mode={search.mode}
+          data={{}}
+          label="World map with no highlighted countries because the database is currently unavailable."
+          emptyLine="Surveillance data is temporarily unavailable."
+          attribution="Natural Earth"
+        />
+      </div>
+    );
+  }
 
   if (search.mode === "stats") {
-    const options = await getIndicatorOptions(db);
-    const stats = await getIndicatorMap(
-      db,
-      options,
-      search.indicator,
-      search.period,
-    );
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-5">
         <Filters
           search={search}
           diseases={diseases}
-          indicatorOptions={options}
+          indicatorOptions={indicatorOptions}
           stats={stats}
         />
         {stats ? (
           <StatsView stats={stats} />
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <div className="rounded-[6px] border border-[#E5E5E5] bg-[#F5F5F5] p-5 text-sm text-[#525252]">
             No statistics stored yet.
-          </p>
+          </div>
         )}
       </div>
     );
   }
 
-  const activity = await getReportActivity(db, search.window, search.disease);
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <Filters
         search={search}
         diseases={diseases}
@@ -126,7 +190,7 @@ export async function MapExplorer({
         stats={null}
       />
       <ReportsView
-        activity={activity}
+        activity={activity!}
         search={search}
         diseaseName={diseases.find((d) => d.slug === search.disease)?.name}
       />
@@ -145,28 +209,37 @@ function Filters({
   indicatorOptions: Awaited<ReturnType<typeof getIndicatorOptions>>;
   stats: IndicatorMap | null;
 }) {
-  const select = "h-9 rounded-md border bg-background px-2 text-sm";
+  const selectClass =
+    "h-9 w-full sm:w-auto rounded-[4px] border border-[#D4D4D4] bg-[#FFFFFF] px-2.5 text-sm text-[#171717] transition-colors focus-visible:border-[#FF5A1F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F]/40";
+
+  const hasCustomFilters =
+    (search.mode === "reports" &&
+      (Boolean(search.disease) || search.window !== 90)) ||
+    (search.mode === "stats" &&
+      (Boolean(search.indicator) || Boolean(search.period)));
+
   return (
     <form
       method="get"
       action="/map"
-      className="flex flex-wrap items-end gap-3 rounded-lg border p-3"
+      className="flex flex-col gap-3 rounded-[6px] border border-[#E5E5E5] bg-[#F5F5F5] p-3.5 sm:flex-row sm:flex-wrap sm:items-end"
     >
-      <label className="flex flex-col gap-1 text-xs font-medium">
-        Show
-        <select name="mode" defaultValue={search.mode} className={select}>
+      <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-[#525252]">
+        <span>Show layer</span>
+        <select name="mode" defaultValue={search.mode} className={selectClass}>
           <option value="reports">Official outbreak reports</option>
           <option value="stats">Reported statistics</option>
         </select>
       </label>
+
       {search.mode === "reports" ? (
         <>
-          <label className="flex flex-col gap-1 text-xs font-medium">
-            Disease
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-[#525252]">
+            <span>Disease</span>
             <select
               name="disease"
               defaultValue={search.disease ?? ""}
-              className={select}
+              className={selectClass}
             >
               <option value="">All diseases</option>
               {diseases.map((d) => (
@@ -176,12 +249,12 @@ function Filters({
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-xs font-medium">
-            Published
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-[#525252]">
+            <span>Published window</span>
             <select
               name="window"
               defaultValue={String(search.window)}
-              className={select}
+              className={selectClass}
             >
               {WINDOW_OPTIONS.map((o) => (
                 <option key={o.days} value={o.days}>
@@ -193,12 +266,12 @@ function Filters({
         </>
       ) : (
         <>
-          <label className="flex min-w-0 flex-col gap-1 text-xs font-medium">
-            Indicator
+          <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-[#525252]">
+            <span>Indicator</span>
             <select
               name="indicator"
               defaultValue={stats?.indicator.id ?? ""}
-              className={`${select} max-w-[min(90vw,28rem)]`}
+              className={`${selectClass} max-w-full sm:max-w-[28rem]`}
             >
               {indicatorOptions.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -210,12 +283,12 @@ function Filters({
             </select>
           </label>
           {stats && (
-            <label className="flex flex-col gap-1 text-xs font-medium">
-              Reporting period
+            <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-[#525252]">
+              <span>Reporting period</span>
               <select
                 name="period"
                 defaultValue={stats.period.end}
-                className={select}
+                className={selectClass}
               >
                 {stats.periods.map((p) => (
                   <option key={p.end} value={p.end}>
@@ -231,42 +304,34 @@ function Filters({
           )}
         </>
       )}
-      <Button type="submit" size="sm">
-        Update map
-      </Button>
+
+      <div className="flex items-center gap-2 pt-1 sm:pt-0">
+        <Button type="submit" size="lg" className="h-9 px-3.5">
+          Update map
+        </Button>
+        {hasCustomFilters && (
+          <Link
+            href={search.mode === "stats" ? "/map?mode=stats" : "/map"}
+            className="inline-flex h-9 items-center rounded-[4px] border border-[#D4D4D4] bg-[#FFFFFF] px-3 text-xs font-medium text-[#525252] transition-colors hover:bg-[#EFEFED] hover:text-[#171717] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F]"
+          >
+            Reset filters
+          </Link>
+        )}
+      </div>
     </form>
   );
 }
 
-function Swatch({
-  light,
-  dark,
-  outline,
-}: {
-  light: string;
-  dark: string;
-  outline?: { light: string; dark: string };
-}) {
-  const box = "size-3.5 shrink-0 rounded-sm";
+function Swatch({ color, outline }: { color: string; outline?: string }) {
   return (
-    <>
-      <span
-        className={`${box} inline-block dark:hidden`}
-        style={{
-          background: light,
-          boxShadow: outline ? `0 0 0 2px ${outline.light}` : undefined,
-        }}
-        aria-hidden
-      />
-      <span
-        className={`${box} hidden dark:inline-block`}
-        style={{
-          background: dark,
-          boxShadow: outline ? `0 0 0 2px ${outline.dark}` : undefined,
-        }}
-        aria-hidden
-      />
-    </>
+    <span
+      className="inline-block size-3.5 shrink-0 rounded-[2px] border border-[#171717]/15"
+      style={{
+        background: color,
+        boxShadow: outline ? `0 0 0 2px ${outline}` : undefined,
+      }}
+      aria-hidden="true"
+    />
   );
 }
 
@@ -311,85 +376,101 @@ function ReportsView({
         emptyLine={`Not named in a WHO outbreak report about ${subject} in the ${windowLabel}. This does not mean the disease is absent.`}
         attribution="Reports: World Health Organization, Disease Outbreak News"
       />
-      <div className="flex flex-col gap-2 text-sm">
-        <ul className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Legend">
-          {tiersInWindow.map((t) => (
-            <li key={t.tier} className="flex items-center gap-2">
-              <Swatch
-                light={MAP_COLORS.light.recency[t.tier - 1]}
-                dark={MAP_COLORS.dark.recency[t.tier - 1]}
-                outline={
-                  t.tier <= 3
-                    ? {
-                        light: MAP_COLORS.light.pulse[t.tier - 1],
-                        dark: MAP_COLORS.dark.pulse[t.tier - 1],
-                      }
-                    : undefined
-                }
-              />
-              Latest report {t.label.charAt(0).toLowerCase() + t.label.slice(1)}
+
+      <div className="flex flex-col gap-2.5 rounded-[6px] border border-[#E5E5E5] bg-[#F5F5F5] p-3.5 text-sm">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[#171717]">
+            Report Recency Legend
+          </span>
+          <ul
+            className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-[#171717]"
+            aria-label="Legend"
+          >
+            {tiersInWindow.map((t) => (
+              <li key={t.tier} className="flex items-center gap-2">
+                <Swatch
+                  color={MAP_COLORS.light.recency[t.tier - 1]}
+                  outline={
+                    t.tier <= 3
+                      ? MAP_COLORS.light.pulse[t.tier - 1]
+                      : undefined
+                  }
+                />
+                <span>
+                  Latest report{" "}
+                  {t.label.charAt(0).toLowerCase() + t.label.slice(1)}
+                </span>
+              </li>
+            ))}
+            <li className="flex items-center gap-2">
+              <Swatch color={MAP_COLORS.light.noData} />
+              <span>Not named in a report in this period</span>
             </li>
-          ))}
-          <li className="flex items-center gap-2">
-            <Swatch
-              light={MAP_COLORS.light.noData}
-              dark={MAP_COLORS.dark.noData}
-            />
-            Not named in a report in this period
-          </li>
-        </ul>
-        <p className="text-xs text-muted-foreground">
+          </ul>
+        </div>
+        <p className="text-xs leading-relaxed text-[#525252]">
           Outlines pulse for countries named in a report in the past year;
-          faster means more recent. The pulse shows when WHO <em>published</em>{" "}
-          a report, not current case activity, and stops for reduced-motion
-          settings. Countries are those named in report titles; whole countries
-          are shaded because reports rarely give precise locations.
+          faster means more recent. The pulse and shading show when WHO{" "}
+          <em>published</em> a report—not outbreak severity or current case
+          activity—and stop automatically for reduced-motion settings. Countries
+          are those named in report titles; whole countries are shaded because
+          reports rarely give sub-national coordinates.
         </p>
       </div>
 
       <section
         aria-labelledby="countries-heading"
-        className="flex flex-col gap-2"
+        className="flex flex-col gap-3 pt-2"
       >
-        <h2 id="countries-heading" className="text-lg font-semibold">
-          Countries named in reports ({activity.countries.length})
-        </h2>
+        <div className="border-b border-[#E5E5E5] pb-2">
+          <h2
+            id="countries-heading"
+            className="text-lg font-semibold tracking-tight text-[#171717]"
+          >
+            Countries named in reports ({activity.countries.length})
+          </h2>
+        </div>
+
         {activity.countries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <div className="rounded-[6px] border border-[#E5E5E5] bg-[#F5F5F5] p-5 text-sm text-[#525252]">
             No WHO Disease Outbreak News report about {subject} named a country
-            in the {windowLabel}. Try a longer period.
-          </p>
+            in the {windowLabel}. Try selecting a longer time window above.
+          </div>
         ) : (
-          <ul className="divide-y rounded-lg border">
+          <ul className="divide-y divide-[#E5E5E5] rounded-[6px] border border-[#E5E5E5] bg-[#FFFFFF]">
             {activity.countries.map((c) => (
               <li
                 key={c.iso3}
-                className="flex flex-col gap-1 p-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                className="flex flex-col gap-1.5 px-4 py-3 transition-colors hover:bg-[#F5F5F5]/70 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
               >
-                <div className="min-w-0">
-                  <p className="font-medium">
-                    {c.name}{" "}
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-semibold text-[#171717]">
+                      {c.name}
+                    </span>
                     {c.diseases.map((d) => (
-                      <Badge
-                        key={d}
-                        variant="outline"
-                        className="ml-1 align-middle"
-                      >
+                      <Badge key={d} variant="outline">
                         {d}
                       </Badge>
                     ))}
-                  </p>
+                  </div>
                   <a
                     href={c.latest.url}
-                    className="text-sm underline-offset-4 hover:underline"
+                    className="group inline-flex items-baseline gap-1 text-sm text-[#525252] underline-offset-4 hover:text-[#C23B0A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F] rounded-sm break-words"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    {c.latest.title}
+                    <span>{c.latest.title}</span>
+                    <ArrowUpRight
+                      className="size-3.5 shrink-0 translate-y-0.5 text-[#737373] group-hover:text-[#C23B0A]"
+                      aria-hidden="true"
+                    />
                   </a>
                 </div>
-                <p className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {shortDate(c.latest.publishedAt)}
+                <p className="shrink-0 text-xs text-[#525252] tabular-nums">
+                  <span className="font-medium text-[#171717]">
+                    {shortDate(c.latest.publishedAt)}
+                  </span>
                   {c.latest.displayId ? ` · ${c.latest.displayId}` : ""} ·{" "}
                   {c.reportCount} report{c.reportCount === 1 ? "" : "s"}
                 </p>
@@ -402,32 +483,44 @@ function ReportsView({
       {activity.otherReports.length > 0 && (
         <section
           aria-labelledby="other-heading"
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-3 pt-2"
         >
-          <h2 id="other-heading" className="text-lg font-semibold">
-            Global, regional and other reports ({activity.otherReports.length})
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            These reports do not name a single country in their title (or
-            concern a disease outside the catalog), so they are not drawn on the
-            map.
-          </p>
-          <ul className="divide-y rounded-lg border">
+          <div className="border-b border-[#E5E5E5] pb-2">
+            <h2
+              id="other-heading"
+              className="text-lg font-semibold tracking-tight text-[#171717]"
+            >
+              Global, regional and other reports ({activity.otherReports.length}
+              )
+            </h2>
+            <p className="text-xs text-[#525252]">
+              These reports do not name a single country in their title (or
+              concern a disease outside the catalog), so they are listed here
+              rather than drawn on the map.
+            </p>
+          </div>
+          <ul className="divide-y divide-[#E5E5E5] rounded-[6px] border border-[#E5E5E5] bg-[#FFFFFF]">
             {activity.otherReports.map((r) => (
               <li
                 key={r.url}
-                className="flex flex-col gap-1 p-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                className="flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-[#F5F5F5]/70 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
               >
                 <a
                   href={r.url}
-                  className="text-sm underline-offset-4 hover:underline"
+                  className="group inline-flex items-baseline gap-1 text-sm font-medium text-[#171717] underline-offset-4 hover:text-[#C23B0A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F] rounded-sm break-words"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {r.title}
+                  <span>{r.title}</span>
+                  <ArrowUpRight
+                    className="size-3.5 shrink-0 translate-y-0.5 text-[#737373] group-hover:text-[#C23B0A]"
+                    aria-hidden="true"
+                  />
                 </a>
-                <p className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {shortDate(r.publishedAt)}
+                <p className="shrink-0 text-xs text-[#525252] tabular-nums">
+                  <span className="font-medium text-[#171717]">
+                    {shortDate(r.publishedAt)}
+                  </span>
                   {r.displayId ? ` · ${r.displayId}` : ""}
                 </p>
               </li>
@@ -435,7 +528,7 @@ function ReportsView({
           </ul>
         </section>
       )}
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-[#525252]">
         Source: World Health Organization, Disease Outbreak News. Titles and
         dates are shown as published; follow the links for the authoritative
         text.
@@ -480,61 +573,79 @@ function StatsView({ stats }: { stats: IndicatorMap }) {
         emptyLine={`No value reported for ${periodLabel}. This does not mean zero cases.`}
         attribution={`Data: ${indicator.sourceName}`}
       />
-      <div className="flex flex-col gap-2 text-sm">
-        <ul className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Legend">
-          {classes.map((c) => (
-            <li key={c.index} className="flex items-center gap-2 tabular-nums">
-              <Swatch
-                light={MAP_COLORS.light.magnitude[c.index - 1]}
-                dark={MAP_COLORS.dark.magnitude[c.index - 1]}
-              />
-              {c.index === 1 ? "1" : `>${numberFormat.format(c.lower)}`} –{" "}
-              {numberFormat.format(c.upper)}
+      <div className="flex flex-col gap-2.5 rounded-[6px] border border-[#E5E5E5] bg-[#F5F5F5] p-3.5 text-sm">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[#171717]">
+            {indicator.unit.charAt(0).toUpperCase() + indicator.unit.slice(1)}{" "}
+            Legend ({periodLabel})
+          </span>
+          <ul
+            className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-[#171717]"
+            aria-label="Legend"
+          >
+            {classes.map((c) => (
+              <li key={c.index} className="flex items-center gap-2 tabular-nums">
+                <Swatch color={MAP_COLORS.light.magnitude[c.index - 1]} />
+                <span>
+                  {c.index === 1 ? "1" : `>${numberFormat.format(c.lower)}`} –{" "}
+                  {numberFormat.format(c.upper)}
+                </span>
+              </li>
+            ))}
+            <li className="flex items-center gap-2">
+              <Swatch color={MAP_COLORS.light.zero} />
+              <span>Zero (or a negative correction) reported</span>
             </li>
-          ))}
-          <li className="flex items-center gap-2">
-            <Swatch light={MAP_COLORS.light.zero} dark={MAP_COLORS.dark.zero} />
-            Zero (or a negative correction) reported
-          </li>
-          <li className="flex items-center gap-2">
-            <Swatch
-              light={MAP_COLORS.light.noData}
-              dark={MAP_COLORS.dark.noData}
-            />
-            No value reported
-          </li>
-        </ul>
-        <p className="text-xs text-muted-foreground">
+            <li className="flex items-center gap-2">
+              <Swatch color={MAP_COLORS.light.noData} />
+              <span>No value reported</span>
+            </li>
+          </ul>
+        </div>
+        <p className="text-xs leading-relaxed text-[#525252]">
           {indicator.unit.charAt(0).toUpperCase() + indicator.unit.slice(1)} per
-          country, {periodLabel}, from {indicator.sourceName}. Counts are not
-          adjusted for population or testing and are not comparable across
-          countries without context. {indicator.definition}
+          country, {periodLabel}, from{" "}
+          <strong className="font-medium text-[#171717]">
+            {indicator.sourceName}
+          </strong>
+          . Counts are not adjusted for population or testing capacity and are
+          not directly comparable across countries without context. Missing
+          values reflect reporting cadence rather than zero cases.{" "}
+          {indicator.definition}
         </p>
       </div>
-      <details className="rounded-lg border p-3">
-        <summary className="cursor-pointer text-sm font-medium">
-          Data table ({reported.length} countries with a value)
+      <details className="group rounded-[6px] border border-[#E5E5E5] bg-[#FFFFFF] p-3.5">
+        <summary className="cursor-pointer text-sm font-semibold text-[#171717] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F] rounded-sm">
+          Country data table ({reported.length} countries with a reported value
+          for {periodLabel})
         </summary>
-        <table className="mt-3 w-full text-sm">
-          <thead>
-            <tr className="text-left text-muted-foreground">
-              <th className="py-1 font-medium">Country</th>
-              <th className="py-1 text-right font-medium">
-                Value ({indicator.unit})
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((v) => (
-              <tr key={v.iso3} className="border-t">
-                <td className="py-1">{v.name}</td>
-                <td className="py-1 text-right tabular-nums">
-                  {v.rawValue ?? numberFormat.format(v.value!)}
-                </td>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#E5E5E5] bg-[#F5F5F5] text-left text-xs font-semibold uppercase tracking-wider text-[#525252]">
+                <th className="px-3 py-2">Country</th>
+                <th className="px-3 py-2 text-right">
+                  Value ({indicator.unit})
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-[#E5E5E5]">
+              {sorted.map((v) => (
+                <tr
+                  key={v.iso3}
+                  className="transition-colors hover:bg-[#F5F5F5]/60"
+                >
+                  <td className="px-3 py-2 font-medium text-[#171717]">
+                    {v.name}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-[#171717]">
+                    {v.rawValue ?? numberFormat.format(v.value!)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </details>
     </>
   );

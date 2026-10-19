@@ -8,7 +8,7 @@ import type {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
-import { MAP_COLORS, type MapTheme } from "./palette";
+import { MAP_COLORS } from "./palette";
 
 /** What the map shows for one country. Built on the server. */
 export interface MapCountryDatum {
@@ -39,10 +39,6 @@ type CountryCollection = GeoJSON.FeatureCollection<
   GeoJSON.Geometry,
   { iso3: string; name: string }
 >;
-
-function currentTheme(): MapTheme {
-  return document.documentElement.classList.contains("dark") ? "dark" : "light";
-}
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -83,10 +79,8 @@ function withData(
 
 function fillColorExpression(
   mode: WorldMapProps["mode"],
-  theme: MapTheme,
 ): maplibregl.ExpressionSpecification {
-  const colors = MAP_COLORS[theme];
-  // Class n uses ramp[n - 1]: magnitude classes 1..5, or recency tiers 1..3.
+  const colors = MAP_COLORS.light;
   const ramp = mode === "reports" ? colors.recency : colors.magnitude;
   const stops: (string | number)[] = [];
   ramp.forEach((color, i) => stops.push(i + 1, color));
@@ -107,7 +101,6 @@ function popupContent(
   datum: MapCountryDatum | undefined,
   emptyLine: string,
 ): HTMLElement {
-  // Built with textContent only: titles come from external sources.
   const root = document.createElement("div");
   root.className = "widsp-popup";
   const heading = document.createElement("p");
@@ -149,13 +142,13 @@ export function WorldMap({
     propsRef.current = { mode, data, emptyLine };
   }, [mode, data, emptyLine]);
 
-  // Create the map once.
+  // Create the map once in light mode.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     let cancelled = false;
     let frame = 0;
-    const theme = currentTheme();
+    const colors = MAP_COLORS.light;
     maplibregl.setWorkerUrl(WORKER_URL);
 
     const map = new maplibregl.Map({
@@ -167,11 +160,10 @@ export function WorldMap({
           {
             id: "background",
             type: "background",
-            paint: { "background-color": MAP_COLORS[theme].water },
+            paint: { "background-color": colors.water },
           },
         ],
       },
-      // Fit the inhabited world at any container size.
       bounds: [
         [-168, -56],
         [190, 78],
@@ -233,13 +225,13 @@ export function WorldMap({
           id: "country-fill",
           type: "fill",
           source: "countries",
-          paint: { "fill-color": fillColorExpression(m, theme) },
+          paint: { "fill-color": fillColorExpression(m) },
         });
         map.addLayer({
           id: "country-border",
           type: "line",
           source: "countries",
-          paint: { "line-color": MAP_COLORS[theme].border, "line-width": 0.5 },
+          paint: { "line-color": colors.border, "line-width": 0.6 },
         });
         for (const tier of [3, 2, 1] as const) {
           map.addLayer({
@@ -248,7 +240,7 @@ export function WorldMap({
             source: "countries",
             filter: ["==", ["get", "pulseTier"], tier],
             paint: {
-              "line-color": MAP_COLORS[theme].pulse[tier - 1],
+              "line-color": colors.pulse[tier - 1],
               "line-width": 2,
               "line-opacity": 0.9,
             },
@@ -259,7 +251,7 @@ export function WorldMap({
           type: "line",
           source: "countries",
           filter: ["==", ["get", "iso3"], ""],
-          paint: { "line-color": MAP_COLORS[theme].hover, "line-width": 2 },
+          paint: { "line-color": colors.hover, "line-width": 2 },
         });
 
         map.on("mousemove", "country-fill", (e) => {
@@ -297,7 +289,7 @@ export function WorldMap({
           let last = 0;
           const animate = (time: number) => {
             frame = requestAnimationFrame(animate);
-            if (time - last < 33) return; // ~30 fps is plenty for a pulse
+            if (time - last < 33) return;
             last = time;
             for (const tier of [1, 2, 3] as const) {
               const b = heartbeat(
@@ -326,59 +318,43 @@ export function WorldMap({
       }
     });
 
-    // Follow the site's theme toggle.
-    const observer = new MutationObserver(() => {
-      if (!map.getLayer("country-fill")) return;
-      const t = currentTheme();
-      const colors = MAP_COLORS[t];
-      map.setPaintProperty("background", "background-color", colors.water);
-      map.setPaintProperty(
-        "country-fill",
-        "fill-color",
-        fillColorExpression(propsRef.current.mode, t),
-      );
-      map.setPaintProperty("country-border", "line-color", colors.border);
-      map.setPaintProperty("country-hover", "line-color", colors.hover);
-      for (const tier of [1, 2, 3] as const)
-        map.setPaintProperty(
-          `pulse-${tier}`,
-          "line-color",
-          colors.pulse[tier - 1],
-        );
-    });
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
     return () => {
       cancelled = true;
       cancelAnimationFrame(frame);
-      observer.disconnect();
       popup.remove();
       map.remove();
       mapRef.current = null;
     };
   }, [attribution]);
 
-  // Push new data without recreating the map.
+  // Push new data and update paint properties safely when map style is loaded.
   useEffect(() => {
     const map = mapRef.current;
     const boundaries = boundariesRef.current;
     if (!map || !boundaries || status !== "ready") return;
-    (map.getSource("countries") as GeoJSONSource | undefined)?.setData(
-      withData(boundaries, data),
-    );
-    map.setPaintProperty(
-      "country-fill",
-      "fill-color",
-      fillColorExpression(mode, currentTheme()),
-    );
+
+    const updateMap = () => {
+      if (!map.isStyleLoaded() || !map.getLayer("country-fill")) return;
+      const source = map.getSource("countries") as GeoJSONSource | undefined;
+      if (source) {
+        source.setData(withData(boundaries, data));
+      }
+      map.setPaintProperty(
+        "country-fill",
+        "fill-color",
+        fillColorExpression(mode),
+      );
+    };
+
+    if (map.isStyleLoaded()) {
+      updateMap();
+    } else {
+      map.once("styledata", updateMap);
+    }
   }, [data, mode, status]);
 
   return (
-    <div className="relative h-[60vh] min-h-[360px] w-full overflow-hidden rounded-lg border bg-muted">
-      {/* MapLibre's stylesheet makes this element position: relative, so it is sized with h-full. */}
+    <div className="relative h-[60vh] min-h-[360px] w-full overflow-hidden rounded-[6px] border border-[#E5E5E5] bg-[#F8F8F7]">
       <div
         ref={containerRef}
         className="h-full w-full"
@@ -387,18 +363,25 @@ export function WorldMap({
       />
       {status === "loading" && (
         <div
-          className="absolute inset-0 grid place-items-center text-sm text-muted-foreground"
+          className="absolute inset-0 grid place-items-center bg-[#F8F8F7]/90 text-sm font-medium text-[#525252]"
           aria-live="polite"
         >
-          Loading map…
+          <span className="inline-flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="size-2 animate-ping rounded-full bg-[#FF5A1F]"
+            />
+            Loading map boundaries…
+          </span>
         </div>
       )}
       {status === "error" && (
         <div
-          className="absolute inset-0 grid place-items-center p-4 text-center text-sm"
+          className="absolute inset-0 grid place-items-center bg-[#FEF2F2]/95 p-4 text-center text-sm font-medium text-[#B91C1C]"
           role="alert"
         >
-          The map could not be loaded. The data is still listed below.
+          The map boundaries could not be loaded. All underlying surveillance
+          data is listed in the sections below.
         </div>
       )}
     </div>

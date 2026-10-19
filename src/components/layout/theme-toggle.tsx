@@ -1,20 +1,8 @@
-"use client";
-
-import { Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
-import { Button } from "@/components/ui/button";
-
+/**
+ * WIDSP is strictly light-mode-only.
+ * Retained as a null component so any legacy references compile cleanly
+ * without exposing a user-facing theme toggle.
+ */
 export function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label="Toggle colour theme"
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-    >
-      <Sun className="hidden dark:block" aria-hidden />
-      <Moon className="block dark:hidden" aria-hidden />
-    </Button>
-  );
+  return null;
 }
