@@ -35,6 +35,12 @@ const BOUNDARIES_URL = "/geo/countries.geojson";
 // Served from public/ (see scripts/copy-maplibre-worker.mjs).
 const WORKER_URL = "/maplibre/maplibre-gl-worker.mjs";
 
+const HOVER_TINT_COLOR = "#FF5A1F";
+const HOVER_TINT_OPACITY = 0.35;
+
+const DEFAULT_CENTER: [number, number] = [12, 18];
+const DEFAULT_ZOOM = 1.15;
+
 type CountryCollection = GeoJSON.FeatureCollection<
   GeoJSON.Geometry,
   { iso3: string; name: string }
@@ -134,12 +140,14 @@ export function WorldMap({
   const mapRef = useRef<MapLibreMap | null>(null);
   const boundariesRef = useRef<CountryCollection | null>(null);
   const propsRef = useRef({ mode, data, emptyLine });
+  const hasPulseRef = useRef(false);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
 
   useEffect(() => {
     propsRef.current = { mode, data, emptyLine };
+    hasPulseRef.current = Object.values(data).some((d) => d.pulseTier);
   }, [mode, data, emptyLine]);
 
   // Create the map once in light mode.
@@ -164,14 +172,11 @@ export function WorldMap({
           },
         ],
       },
-      bounds: [
-        [-168, -56],
-        [190, 78],
-      ],
-      fitBoundsOptions: { padding: 4 },
-      minZoom: 0,
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      minZoom: 0.75,
       maxZoom: 6,
-      renderWorldCopies: false,
+      renderWorldCopies: true,
       attributionControl: { compact: true, customAttribution: attribution },
       dragRotate: false,
       pitchWithRotate: false,
@@ -184,28 +189,124 @@ export function WorldMap({
     map.addControl(new maplibregl.FullscreenControl(), "top-right");
     mapRef.current = map;
 
+    // Elastic bounceback when user drags past the inhabited world bounds
+    let isBouncingBack = false;
+    const enforceElasticBounds = () => {
+      if (isBouncingBack) return;
+      const center = map.getCenter();
+      const zoom = map.getZoom();
+      const maxLat = zoom < 1.6 ? 42 : 68;
+      const minLat = zoom < 1.6 ? -32 : -58;
+      const clampedLat = Math.max(minLat, Math.min(maxLat, center.lat));
+      const clampedLng = Math.max(-165, Math.min(165, center.lng));
+
+      if (
+        Math.abs(clampedLat - center.lat) > 0.5 ||
+        Math.abs(clampedLng - center.lng) > 0.5
+      ) {
+        isBouncingBack = true;
+        map.easeTo({
+          center: [clampedLng, clampedLat],
+          duration: prefersReducedMotion() ? 0 : 280,
+        });
+        map.once("moveend", () => {
+          isBouncingBack = false;
+        });
+      }
+    };
+
+    map.on("dragend", enforceElasticBounds);
+    map.on("zoomend", enforceElasticBounds);
+
     const popup = new maplibregl.Popup({
       closeButton: false,
       closeOnClick: false,
       maxWidth: "280px",
-      offset: 8,
+      offset: 12,
+      className: "widsp-map-popup",
     });
     let pinned = false;
+    let shownIso: string | null = null;
+    let hoveredIso: string | null = null;
+
+    const hidePopup = () => {
+      shownIso = null;
+      popup.remove();
+    };
 
     const showPopup = (
       feature: MapGeoJSONFeature,
       lngLat: maplibregl.LngLat,
+      isPinned: boolean,
+      force = false,
     ) => {
       const { iso3, name } = feature.properties as {
         iso3: string;
         name: string;
       };
       const { data: current, emptyLine: empty } = propsRef.current;
-      popup
-        .setLngLat(lngLat)
-        .setDOMContent(popupContent(name, current[iso3], empty))
-        .addTo(map);
+      const datum = current[iso3];
+
+      if (force || iso3 !== shownIso || !popup.isOpen()) {
+        popup
+          .setLngLat(lngLat)
+          .setDOMContent(popupContent(name, datum, empty))
+          .addTo(map);
+        shownIso = iso3;
+      } else {
+        popup.setLngLat(lngLat);
+      }
+
+      const el = popup.getElement();
+      if (el) {
+        el.style.pointerEvents = isPinned && datum?.link ? "auto" : "none";
+      }
     };
+
+    const setHovered = (iso: string | null) => {
+      if (iso === hoveredIso) return;
+      if (hoveredIso) {
+        try {
+          map.setFeatureState(
+            { source: "countries", id: hoveredIso },
+            { hover: false },
+          );
+        } catch {
+          // Ignore if source not yet ready
+        }
+      }
+      if (iso) {
+        try {
+          map.setFeatureState(
+            { source: "countries", id: iso },
+            { hover: true },
+          );
+        } catch {
+          // Ignore if source not yet ready
+        }
+      }
+      hoveredIso = iso;
+    };
+
+    const clearHoverAndPopup = () => {
+      if (!map.getSource("countries")) return;
+      map.getCanvas().style.cursor = "";
+      setHovered(null);
+      if (!pinned) {
+        hidePopup();
+      }
+    };
+
+    const onContainerLeave = () => {
+      clearHoverAndPopup();
+    };
+    container.addEventListener("mouseleave", onContainerLeave);
+
+    map.on("dragstart", () => {
+      pinned = false;
+      hidePopup();
+      clearHoverAndPopup();
+    });
 
     map.on("load", async () => {
       try {
@@ -220,12 +321,28 @@ export function WorldMap({
           type: "geojson",
           data: withData(boundaries, d),
           attribution: "Natural Earth",
+          promoteId: "iso3",
+          maxzoom: 6,
         });
         map.addLayer({
           id: "country-fill",
           type: "fill",
           source: "countries",
           paint: { "fill-color": fillColorExpression(m) },
+        });
+        map.addLayer({
+          id: "country-hover-fill",
+          type: "fill",
+          source: "countries",
+          paint: {
+            "fill-color": HOVER_TINT_COLOR,
+            "fill-opacity": [
+              "case",
+              ["boolean", ["feature-state", "hover"], false],
+              HOVER_TINT_OPACITY,
+              0,
+            ] as unknown as maplibregl.ExpressionSpecification,
+          },
         });
         map.addLayer({
           id: "country-border",
@@ -246,40 +363,38 @@ export function WorldMap({
             },
           });
         }
-        map.addLayer({
-          id: "country-hover",
-          type: "line",
-          source: "countries",
-          filter: ["==", ["get", "iso3"], ""],
-          paint: { "line-color": colors.hover, "line-width": 2 },
-        });
 
+        // Synchronous mousemove handler on country-fill so e.features[0] is never lost
         map.on("mousemove", "country-fill", (e) => {
           const feature = e.features?.[0];
-          if (!feature) return;
+          if (!feature) {
+            clearHoverAndPopup();
+            return;
+          }
+          const iso = (feature.properties as { iso3: string }).iso3;
           map.getCanvas().style.cursor = "pointer";
-          map.setFilter("country-hover", [
-            "==",
-            ["get", "iso3"],
-            feature.properties.iso3,
-          ]);
-          if (!pinned) showPopup(feature, e.lngLat);
+          setHovered(iso);
+          if (!pinned) {
+            showPopup(feature, e.lngLat, false);
+          }
         });
+
         map.on("mouseleave", "country-fill", () => {
-          map.getCanvas().style.cursor = "";
-          map.setFilter("country-hover", ["==", ["get", "iso3"], ""]);
-          if (!pinned) popup.remove();
+          clearHoverAndPopup();
         });
+
         map.on("click", (e) => {
           const feature = map.queryRenderedFeatures(e.point, {
             layers: ["country-fill"],
           })[0];
           if (feature) {
-            pinned = true;
-            showPopup(feature, e.lngLat);
+            const iso3 = (feature.properties as { iso3: string }).iso3;
+            const hasLink = Boolean(propsRef.current.data[iso3]?.link);
+            pinned = hasLink;
+            showPopup(feature, e.lngLat, hasLink, true);
           } else {
             pinned = false;
-            popup.remove();
+            hidePopup();
           }
         });
 
@@ -291,6 +406,7 @@ export function WorldMap({
             frame = requestAnimationFrame(animate);
             if (time - last < 33) return;
             last = time;
+            if (!hasPulseRef.current) return;
             for (const tier of [1, 2, 3] as const) {
               const b = heartbeat(
                 (time % PULSE_PERIOD_MS[tier]) / PULSE_PERIOD_MS[tier],
@@ -320,6 +436,7 @@ export function WorldMap({
 
     return () => {
       cancelled = true;
+      container.removeEventListener("mouseleave", onContainerLeave);
       cancelAnimationFrame(frame);
       popup.remove();
       map.remove();
@@ -353,6 +470,16 @@ export function WorldMap({
     }
   }, [data, mode, status]);
 
+  const handleResetView = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.easeTo({
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      duration: prefersReducedMotion() ? 0 : 350,
+    });
+  };
+
   return (
     <div className="relative h-[60vh] min-h-[360px] w-full overflow-hidden rounded-[6px] border border-[#E5E5E5] bg-[#F8F8F7]">
       <div
@@ -361,6 +488,15 @@ export function WorldMap({
         role="img"
         aria-label={label}
       />
+      {status === "ready" && (
+        <button
+          type="button"
+          onClick={handleResetView}
+          className="absolute left-2.5 top-2.5 z-10 inline-flex h-7 items-center rounded-[4px] border border-[#D4D4D4] bg-[#FFFFFF]/95 px-2.5 text-xs font-medium text-[#171717] shadow-xs transition-colors hover:bg-[#F5F5F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F]"
+        >
+          Reset view
+        </button>
+      )}
       {status === "loading" && (
         <div
           className="absolute inset-0 grid place-items-center bg-[#F8F8F7]/90 text-sm font-medium text-[#525252]"
