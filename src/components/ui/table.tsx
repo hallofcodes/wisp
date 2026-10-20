@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+
+// wote wrong import. fixed it
 import { cn } from "cn";
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
