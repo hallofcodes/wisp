@@ -1,4 +1,6 @@
+// this was the first change i made (personal note. please ignore)
 "use client";
+
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
