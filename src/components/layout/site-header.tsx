@@ -42,14 +42,10 @@ export function SiteHeader() {
             >
               W
             </span>
-            <span className="flex flex-col">
-              <span className="text-sm font-semibold tracking-tight text-[#171717] leading-none">
-                {siteConfig.name}
-              </span>
-              <span className="hidden text-[11px] text-[#525252] leading-tight sm:inline-block">
-                {siteConfig.fullName}
-              </span>
+            <span className="text-base font-semibold tracking-tight text-[#171717]">
+              {siteConfig.name}
             </span>
+            <span className="sr-only">{siteConfig.fullName}</span>
           </Link>
 
           <nav

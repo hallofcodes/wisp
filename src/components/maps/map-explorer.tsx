@@ -1,15 +1,9 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, ChevronDown, RotateCcw } from "lucide-react";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { getDb } from "@/lib/db/client";
 import {
   CLASSIFICATION_LABELS,
@@ -121,43 +115,31 @@ export async function MapExplorer({
 
   if (hasError) {
     return (
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4">
         <Filters
           search={search}
           diseases={[]}
           indicatorOptions={[]}
           stats={null}
         />
-        <Card
-          role="alert"
-          className="border-l-4 border-l-[#B91C1C] bg-[#FEF2F2]/50"
-        >
-          <CardHeader>
-            <CardTitle className="text-[#171717]">
-              Surveillance database is currently unavailable
-            </CardTitle>
-            <CardDescription className="text-[#525252]">
-              The database could not be reached (or <code>DATABASE_URL</code> is
-              not configured in <code>.env</code>). The interactive base map is
-              shown below with no highlighted countries rather than displaying
-              fabricated or stale surveillance data.
-            </CardDescription>
-          </CardHeader>
-        </Card>
         <WorldMap
           mode={search.mode}
           data={{}}
-          label="World map with no highlighted countries because the database is currently unavailable."
-          emptyLine="Surveillance data is temporarily unavailable."
+          label="World map with no highlighted countries because no database records are currently loaded."
+          emptyLine="No local database records loaded."
           attribution="Natural Earth"
         />
+        <p className="text-xs text-[#737373]">
+          Local database connection is not active. Showing base geographic
+          boundaries without highlighted surveillance records.
+        </p>
       </div>
     );
   }
 
   if (search.mode === "stats") {
     return (
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4">
         <Filters
           search={search}
           diseases={diseases}
@@ -176,7 +158,7 @@ export async function MapExplorer({
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       <Filters
         search={search}
         diseases={diseases}
@@ -192,6 +174,41 @@ export async function MapExplorer({
   );
 }
 
+function SelectField({
+  label,
+  name,
+  defaultValue,
+  children,
+  className = "",
+}: {
+  label: string;
+  name: string;
+  defaultValue: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`flex flex-col gap-1.5 ${className}`}>
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-[#525252]">
+        {label}
+      </span>
+      <div className="relative">
+        <select
+          name={name}
+          defaultValue={defaultValue}
+          className="h-9 w-full appearance-none rounded-[5px] border border-[#D4D4D4] bg-[#FFFFFF] pl-3 pr-8 text-sm font-medium text-[#171717] transition-colors hover:border-[#A3A3A3] focus-visible:border-[#FF5A1F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F]/25"
+        >
+          {children}
+        </select>
+        <ChevronDown
+          aria-hidden="true"
+          className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#737373]"
+        />
+      </div>
+    </label>
+  );
+}
+
 function Filters({
   search,
   diseases,
@@ -203,9 +220,6 @@ function Filters({
   indicatorOptions: Awaited<ReturnType<typeof getIndicatorOptions>>;
   stats: IndicatorMap | null;
 }) {
-  const selectClass =
-    "h-9 w-full sm:w-auto rounded-[4px] border border-[#D4D4D4] bg-[#FFFFFF] px-2.5 text-sm text-[#171717] transition-colors focus-visible:border-[#FF5A1F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F]/40";
-
   const hasCustomFilters =
     (search.mode === "reports" &&
       (Boolean(search.disease) || search.window !== 90)) ||
@@ -216,24 +230,24 @@ function Filters({
     <form
       method="get"
       action="/map"
-      className="flex flex-col gap-3 rounded-[6px] border border-[#E5E5E5] bg-[#F5F5F5] p-3.5 sm:flex-row sm:flex-wrap sm:items-end"
+      className="flex flex-col gap-3 rounded-[6px] border border-[#E5E5E5] bg-[#FFFFFF] p-3.5 shadow-[0_1px_2px_rgb(0_0_0/0.03)] sm:flex-row sm:flex-wrap sm:items-end sm:justify-between"
     >
-      <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-[#525252]">
-        <span>Show layer</span>
-        <select name="mode" defaultValue={search.mode} className={selectClass}>
+      <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
+        <SelectField
+          label="Data View"
+          name="mode"
+          defaultValue={search.mode}
+        >
           <option value="reports">Official outbreak reports</option>
           <option value="stats">Reported statistics</option>
-        </select>
-      </label>
+        </SelectField>
 
-      {search.mode === "reports" ? (
-        <>
-          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-[#525252]">
-            <span>Disease</span>
-            <select
+        {search.mode === "reports" ? (
+          <>
+            <SelectField
+              label="Disease Filter"
               name="disease"
               defaultValue={search.disease ?? ""}
-              className={selectClass}
             >
               <option value="">All diseases</option>
               {diseases.map((d) => (
@@ -241,31 +255,27 @@ function Filters({
                   {d.name}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-[#525252]">
-            <span>Published window</span>
-            <select
+            </SelectField>
+
+            <SelectField
+              label="Time Window"
               name="window"
               defaultValue={String(search.window)}
-              className={selectClass}
             >
               {WINDOW_OPTIONS.map((o) => (
                 <option key={o.days} value={o.days}>
                   {o.label}
                 </option>
               ))}
-            </select>
-          </label>
-        </>
-      ) : (
-        <>
-          <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-[#525252]">
-            <span>Indicator</span>
-            <select
+            </SelectField>
+          </>
+        ) : (
+          <>
+            <SelectField
+              label="Indicator"
               name="indicator"
               defaultValue={stats?.indicator.id ?? ""}
-              className={`${selectClass} max-w-full sm:max-w-[28rem]`}
+              className="sm:col-span-2"
             >
               {indicatorOptions.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -274,15 +284,13 @@ function Filters({
                   {o.sourceName})
                 </option>
               ))}
-            </select>
-          </label>
-          {stats && (
-            <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-[#525252]">
-              <span>Reporting period</span>
-              <select
+            </SelectField>
+
+            {stats && (
+              <SelectField
+                label="Reporting Period"
                 name="period"
                 defaultValue={stats.period.end}
-                className={selectClass}
               >
                 {stats.periods.map((p) => (
                   <option key={p.end} value={p.end}>
@@ -293,22 +301,27 @@ function Filters({
                       : `${shortDate(p.start)} – ${shortDate(p.end)}`}
                   </option>
                 ))}
-              </select>
-            </label>
-          )}
-        </>
-      )}
+              </SelectField>
+            )}
+          </>
+        )}
+      </div>
 
-      <div className="flex items-center gap-2 pt-1 sm:pt-0">
-        <Button type="submit" size="lg" className="h-9 px-3.5">
-          Update map
+      <div className="flex items-center gap-2 sm:pl-2">
+        <Button
+          type="submit"
+          size="lg"
+          className="h-9 px-4 text-xs font-semibold tracking-wide"
+        >
+          Apply
         </Button>
         {hasCustomFilters && (
           <Link
             href={search.mode === "stats" ? "/map?mode=stats" : "/map"}
-            className="inline-flex h-9 items-center rounded-[4px] border border-[#D4D4D4] bg-[#FFFFFF] px-3 text-xs font-medium text-[#525252] transition-colors hover:bg-[#EFEFED] hover:text-[#171717] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F]"
+            className="inline-flex h-9 items-center gap-1.5 rounded-[5px] border border-[#D4D4D4] bg-[#FFFFFF] px-3 text-xs font-medium text-[#525252] transition-colors hover:bg-[#F5F5F5] hover:text-[#171717] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A1F]"
           >
-            Reset filters
+            <RotateCcw className="size-3" aria-hidden="true" />
+            <span>Reset</span>
           </Link>
         )}
       </div>
