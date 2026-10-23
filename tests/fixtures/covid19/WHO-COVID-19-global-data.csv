@@ -1,0 +1,15 @@
+Date_reported,Country_code,Country,WHO_region,New_cases,Cumulative_cases,New_deaths,Cumulative_deaths
+2026-09-13,CN,China,WPRO,0,99381761,0,122398
+2026-09-20,CN,China,WPRO,0,99381761,0,122398
+2026-09-13,FR,France,EURO,280,39062011,,168207
+2026-09-20,FR,France,EURO,356,39062367,,168207
+2026-09-13,NA,Namibia,AFRO,,172557,,4110
+2026-09-20,NA,Namibia,AFRO,,172557,,4110
+2026-09-13,US,United States of America,AMRO,,103436829,106,1239295
+2026-09-20,US,United States of America,AMRO,,103436829,115,1239410
+2026-09-13,XK,Kosovo (in accordance with UN Security Council resolution 1244 (1999)),EURO,,274279,,3212
+2026-09-20,XK,Kosovo (in accordance with UN Security Council resolution 1244 (1999)),EURO,,274279,,3212
+2026-09-13,XXJ,International conveyance (Diamond Princess),OTHER,,712,,13
+2026-09-20,XXJ,International conveyance (Diamond Princess),OTHER,,712,,13
+2020-01-05,BQ,"Bonaire, Saint Eustatius and Saba",AMRO,,0,,0
+2020-01-12,BQ,"Bonaire, Saint Eustatius and Saba",AMRO,,0,,0

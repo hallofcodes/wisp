@@ -1,0 +1,20 @@
+{
+ "@odata.context": "https://ghoapi.azureedge.net/api/$metadata#Indicator",
+ "value": [
+  {
+   "IndicatorCode": "HIV_0000000001",
+   "IndicatorName": "Estimated number of people (all ages) living with HIV",
+   "Language": "EN"
+  },
+  {
+   "IndicatorCode": "WHS3_50",
+   "IndicatorName": "Yellow fever - number of reported cases",
+   "Language": "EN"
+  },
+  {
+   "IndicatorCode": "TB_e_inc_num",
+   "IndicatorName": "Number of incident tuberculosis cases",
+   "Language": "EN"
+  }
+ ]
+}
